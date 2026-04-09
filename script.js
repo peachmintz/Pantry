@@ -307,11 +307,12 @@ function navigate(tab) {
   const renderers = { home: renderHome, log: renderLog, meals: renderMeals, calendar: renderCalendar, profile: renderProfile };
   (renderers[tab] || renderHome)(screen);
   main.appendChild(screen);
-  // Reset scroll — both window and element level to cover all cases
-  window.scrollTo(0, 0);
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
-  main.scrollTop = 0;
+  // Scroll to top — use rAF so the DOM has painted before we scroll
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  });
 }
 
 document.getElementById('bottomNav').addEventListener('click', e => {
@@ -414,12 +415,20 @@ function renderHome(root) {
     root.appendChild(container);
   }
 
-  // Allergen progress (only if ready) — extra top spacing for page balance
+  // ── Lower half of home page ────────────────────────────────
+  // Wrapped in a dedicated bottom section with increased top spacing
+  // so the page feels vertically balanced rather than top-heavy.
+
+  const bottomSection = el('div','home-bottom');
+  bottomSection.style.cssText = 'padding-top: 8px;';
+
+  // Allergen progress card (only if ready)
   if (cat === 'ready') {
-    const alabel = el('p','section-label'); alabel.style.marginTop = '8px'; alabel.textContent = 'Allergen progress'; root.appendChild(alabel);
-    const ac = el('div','card'); ac.style.marginBottom = '22px';
-    const arow = el('div', '', ''); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
-    const acount = el('span',''); acount.style.cssText = 'font-size:14px;font-weight:600;color:var(--text)';
+    const alabel = el('p','section-label'); alabel.textContent = 'Allergen progress';
+    bottomSection.appendChild(alabel);
+    const ac = el('div','card');
+    const arow = el('div'); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
+    const acount = el('span'); acount.style.cssText = 'font-size:0.94rem;font-weight:600;color:var(--text)';
     acount.textContent = `${introduced} of ${KEY_ALLERGENS.length} introduced`;
     const dots = el('div','allergen-dots');
     KEY_ALLERGENS.forEach(id => {
@@ -434,22 +443,36 @@ function renderHome(root) {
       next.innerHTML = `Next up: <strong style="color:var(--text)">${esc(nextAFood.name)}</strong>`;
       ac.appendChild(next);
     }
-    root.appendChild(ac);
+    bottomSection.appendChild(ac);
   }
 
-  // About this stage — extra top margin for lower-page weight
-  const slabel2 = el('p','section-label'); slabel2.style.marginTop = '8px'; slabel2.textContent = 'About this stage'; root.appendChild(slabel2);
+  // About this stage — placed inside a light card for visual weight
+  const slabel2 = el('p','section-label'); slabel2.textContent = 'About this stage';
+  bottomSection.appendChild(slabel2);
+
+  const stageCard = el('div','card');
+  stageCard.style.marginBottom = '0';
+
   const stageRow = el('div','stage-row');
+  stageRow.style.marginBottom = '14px';
   const s1 = el('div','stage-item');
   s1.innerHTML = `<div class="stage-label">Age</div><div class="stage-value">${ageMonths} months</div>`;
-  const div = el('div','stage-divider');
+  const sdiv = el('div','stage-divider');
   const s2 = el('div','stage-item');
   s2.innerHTML = `<div class="stage-label">Texture</div><div class="stage-value">${texture}</div>`;
-  stageRow.appendChild(s1); stageRow.appendChild(div); stageRow.appendChild(s2);
-  root.appendChild(stageRow);
-  const note = el('p','stage-note');
+  stageRow.appendChild(s1); stageRow.appendChild(sdiv); stageRow.appendChild(s2);
+  stageCard.appendChild(stageRow);
+
+  const divider = el('div','divider');
+  stageCard.appendChild(divider);
+
+  const note = el('p','');
+  note.style.cssText = 'font-size:0.8rem;color:var(--text-sub);line-height:1.6;margin-top:10px;padding-bottom:4px';
   note.innerHTML = `Exposure matters more than quantity — it's okay if ${esc(p.name)} eats very little. <em>Raising Children Network</em>`;
-  root.appendChild(note);
+  stageCard.appendChild(note);
+
+  bottomSection.appendChild(stageCard);
+  root.appendChild(bottomSection);
 }
 
 /* ── LOG ────────────────────────────────────────────────────── */
