@@ -319,11 +319,6 @@ document.getElementById('bottomNav').addEventListener('click', e => {
   if (btn) navigate(btn.dataset.tab);
 });
 
-// Header profile icon
-const headerProfileBtn = document.querySelector('.header-profile-btn');
-if (headerProfileBtn) {
-  headerProfileBtn.addEventListener('click', () => navigate('profile'));
-}
 
 /* ── HOME ───────────────────────────────────────────────────── */
 function renderHome(root) {
