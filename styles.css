@@ -65,8 +65,8 @@ input  { font-family: inherit; }
 }
 
 .header-icon {
-  width: 46px;
-  height: 46px;
+  width: 52px;
+  height: 52px;
   object-fit: contain;
   background: transparent;
   display: block;
@@ -149,8 +149,8 @@ input  { font-family: inherit; }
 
 /* Meals icon — same size as others, but stroke is visually thin so compensate */
 .nav-btn-meals svg {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
 }
 
 /* Centre Log tab — slightly larger icon */

@@ -307,12 +307,8 @@ function navigate(tab) {
   const renderers = { home: renderHome, log: renderLog, meals: renderMeals, calendar: renderCalendar, profile: renderProfile };
   (renderers[tab] || renderHome)(screen);
   main.appendChild(screen);
-  // Scroll to top — use rAF so the DOM has painted before we scroll
-  requestAnimationFrame(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  });
+  // Scroll to top — scrollIntoView on the header is reliable on all mobile browsers
+  document.getElementById('appHeader').scrollIntoView({ block: 'start', behavior: 'instant' });
 }
 
 document.getElementById('bottomNav').addEventListener('click', e => {
@@ -349,28 +345,14 @@ function renderHome(root) {
   const nextAId = KEY_ALLERGENS.find(id => allergenStatus(id) === 'not_introduced');
   const nextAFood = nextAId ? foodById(nextAId) : null;
 
-  // Focus banner
+  // ── THIRD 1: Focus banner ────────────────────────────────
   const banner = el('div','focus-banner');
   banner.innerHTML = `<p class="focus-label">Today's focus</p>
     <p class="focus-headline">${esc(focus)}</p>
     <p class="focus-support">${esc(focusSupport)}</p>`;
   root.appendChild(banner);
 
-  // Progress pills
-  const pills = el('div','progress-pills');
-  if (aw >= 26) {
-    const ip = el('div', `progress-pill ${todayHasIron?'pill-iron-yes':'pill-iron-no'}`);
-    ip.innerHTML = `<span class="dot" style="background:${todayHasIron?'var(--peach)':'#C5B9A8'}"></span>Iron today: ${todayHasIron?'Yes':'Not yet'}`;
-    pills.appendChild(ip);
-  }
-  if (cat === 'ready') {
-    const ap = el('div','progress-pill pill-allergen');
-    ap.innerHTML = `<span class="dot" style="background:var(--sky)"></span>Allergens this week: ${weekAllergenDays} day${weekAllergenDays!==1?'s':''}`;
-    pills.appendChild(ap);
-  }
-  root.appendChild(pills);
-
-  // Suggestions
+  // ── THIRD 2: Suggested today (section label + suggestions) ─
   const slabel = el('p','section-label'); slabel.textContent = 'Suggested today'; root.appendChild(slabel);
 
   if (rec.length === 0) {
@@ -415,19 +397,31 @@ function renderHome(root) {
     root.appendChild(container);
   }
 
-  // ── Lower half of home page ────────────────────────────────
-  // Wrapped in a dedicated bottom section with increased top spacing
-  // so the page feels vertically balanced rather than top-heavy.
+  // ── THIRD 3: Progress + stage (equal visual weight to top) ──
+  // Each card has same padding/shadow as suggestion container.
+  // 28px gap between each third.
 
-  const bottomSection = el('div','home-bottom');
-  bottomSection.style.cssText = 'padding-top: 8px;';
-
-  // Allergen progress card (only if ready)
+  // Progress pills moved here — part of the middle/lower weight
+  const pillsWrap = el('div',''); pillsWrap.style.marginTop = '28px';
+  const pills = el('div','progress-pills');
+  if (aw >= 26) {
+    const ip = el('div', `progress-pill ${todayHasIron?'pill-iron-yes':'pill-iron-no'}`);
+    ip.innerHTML = `<span class="dot" style="background:${todayHasIron?'var(--peach)':'#C5B9A8'}"></span>Iron today: ${todayHasIron?'Yes':'Not yet'}`;
+    pills.appendChild(ip);
+  }
   if (cat === 'ready') {
-    const alabel = el('p','section-label'); alabel.textContent = 'Allergen progress';
-    bottomSection.appendChild(alabel);
-    const ac = el('div','card');
-    const arow = el('div'); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
+    const ap = el('div','progress-pill pill-allergen');
+    ap.innerHTML = `<span class="dot" style="background:var(--sky)"></span>Allergens this week: ${weekAllergenDays} day${weekAllergenDays!==1?'s':''}`;
+    pills.appendChild(ap);
+  }
+  if (pills.children.length) { pillsWrap.appendChild(pills); root.appendChild(pillsWrap); }
+
+  // Allergen progress card
+  if (cat === 'ready') {
+    const alabel = el('p','section-label'); alabel.style.marginTop = '6px'; alabel.textContent = 'Allergen progress';
+    root.appendChild(alabel);
+    const ac = el('div','card'); ac.style.padding = '20px 18px';
+    const arow = el('div'); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px';
     const acount = el('span'); acount.style.cssText = 'font-size:0.94rem;font-weight:600;color:var(--text)';
     acount.textContent = `${introduced} of ${KEY_ALLERGENS.length} introduced`;
     const dots = el('div','allergen-dots');
@@ -439,40 +433,31 @@ function renderHome(root) {
     });
     arow.appendChild(acount); arow.appendChild(dots); ac.appendChild(arow);
     if (nextAFood) {
-      const next = el('div','allergen-next');
+      const next = el('div','allergen-next'); next.style.marginTop = '12px';
       next.innerHTML = `Next up: <strong style="color:var(--text)">${esc(nextAFood.name)}</strong>`;
       ac.appendChild(next);
     }
-    bottomSection.appendChild(ac);
+    root.appendChild(ac);
   }
 
-  // About this stage — placed inside a light card for visual weight
-  const slabel2 = el('p','section-label'); slabel2.textContent = 'About this stage';
-  bottomSection.appendChild(slabel2);
-
-  const stageCard = el('div','card');
-  stageCard.style.marginBottom = '0';
-
-  const stageRow = el('div','stage-row');
-  stageRow.style.marginBottom = '14px';
+  // About this stage card
+  const slabel2 = el('p','section-label'); slabel2.style.marginTop = '6px'; slabel2.textContent = 'About this stage';
+  root.appendChild(slabel2);
+  const stageCard = el('div','card'); stageCard.style.padding = '20px 18px';
+  const stageRow = el('div','stage-row'); stageRow.style.marginBottom = '16px';
   const s1 = el('div','stage-item');
-  s1.innerHTML = `<div class="stage-label">Age</div><div class="stage-value">${ageMonths} months</div>`;
+  s1.innerHTML = `<div class="stage-label">Age</div><div class="stage-value" style="font-size:1.1rem">${ageMonths} months</div>`;
   const sdiv = el('div','stage-divider');
   const s2 = el('div','stage-item');
-  s2.innerHTML = `<div class="stage-label">Texture</div><div class="stage-value">${texture}</div>`;
+  s2.innerHTML = `<div class="stage-label">Texture</div><div class="stage-value" style="font-size:1.1rem">${texture}</div>`;
   stageRow.appendChild(s1); stageRow.appendChild(sdiv); stageRow.appendChild(s2);
   stageCard.appendChild(stageRow);
-
-  const divider = el('div','divider');
-  stageCard.appendChild(divider);
-
+  const divider = el('div','divider'); stageCard.appendChild(divider);
   const note = el('p','');
-  note.style.cssText = 'font-size:0.8rem;color:var(--text-sub);line-height:1.6;margin-top:10px;padding-bottom:4px';
+  note.style.cssText = 'font-size:0.82rem;color:var(--text-sub);line-height:1.65;margin-top:12px';
   note.innerHTML = `Exposure matters more than quantity — it's okay if ${esc(p.name)} eats very little. <em>Raising Children Network</em>`;
   stageCard.appendChild(note);
-
-  bottomSection.appendChild(stageCard);
-  root.appendChild(bottomSection);
+  root.appendChild(stageCard);
 }
 
 /* ── LOG ────────────────────────────────────────────────────── */
