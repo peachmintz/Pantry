@@ -300,6 +300,9 @@ function showOnboarding() {
 /* ── Navigation ─────────────────────────────────────────────── */
 function navigate(tab) {
   state.currentTab = tab;
+  // Scroll FIRST before any DOM changes — this is the only reliable approach
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   const main = document.getElementById('appMain');
   main.innerHTML = '';
@@ -307,8 +310,9 @@ function navigate(tab) {
   const renderers = { home: renderHome, log: renderLog, meals: renderMeals, calendar: renderCalendar, profile: renderProfile };
   (renderers[tab] || renderHome)(screen);
   main.appendChild(screen);
-  // Scroll to top — scrollIntoView on the header is reliable on all mobile browsers
-  document.getElementById('appHeader').scrollIntoView({ block: 'start', behavior: 'instant' });
+  // Belt and braces: also scroll after render in case browser restored position
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
 
 document.getElementById('bottomNav').addEventListener('click', e => {
@@ -329,7 +333,7 @@ function renderHome(root) {
     const c = el('div','card');
     c.style.background = 'var(--sky-lt)';
     c.innerHTML = `<p style="font-weight:700;color:var(--text);margin-bottom:6px">Not quite time yet</p>
-      <p style="color:var(--text-mid);font-size:14px;line-height:1.6">${p.name} is ${aw} weeks old. Australian guidelines recommend waiting until at least 4 months — ideally around 6 months — before starting solids.</p>`;
+      <p style="color:var(--text-mid);font-size:14px;line-height:1.6">${p.name} is ${aw} weeks old. Solids are recommended from around 6 months.</p>`;
     root.appendChild(c);
     return;
   }
@@ -345,40 +349,53 @@ function renderHome(root) {
   const nextAId = KEY_ALLERGENS.find(id => allergenStatus(id) === 'not_introduced');
   const nextAFood = nextAId ? foodById(nextAId) : null;
 
-  // ── THIRD 1: Focus banner ────────────────────────────────
+  // ═══════════════════════════════════════════════════════
+  // THIRD 1 — Focus banner (~33% of viewport)
+  // Large, full-width coloured card. Padding increased so it
+  // takes up real vertical space, not just a caption bar.
+  // ═══════════════════════════════════════════════════════
   const banner = el('div','focus-banner');
+  banner.style.cssText = 'margin-bottom:32px;padding:28px 22px;';
   banner.innerHTML = `<p class="focus-label">Today's focus</p>
-    <p class="focus-headline">${esc(focus)}</p>
-    <p class="focus-support">${esc(focusSupport)}</p>`;
+    <p class="focus-headline" style="font-size:1.3rem;margin-bottom:10px">${esc(focus)}</p>
+    <p class="focus-support" style="font-size:0.88rem">${esc(focusSupport)}</p>`;
   root.appendChild(banner);
 
-  // ── THIRD 2: Suggested today (section label + suggestions) ─
-  const slabel = el('p','section-label'); slabel.textContent = 'Suggested today'; root.appendChild(slabel);
+  // ═══════════════════════════════════════════════════════
+  // THIRD 2 — Suggestions (~33% of viewport)
+  // Suggestion rows with generous padding per row.
+  // ═══════════════════════════════════════════════════════
+  const slabel = el('p','section-label'); slabel.style.marginBottom = '10px'; slabel.textContent = 'Suggested today';
+  root.appendChild(slabel);
 
   if (rec.length === 0) {
-    const empty = el('div','card-light'); empty.style.padding = '14px 16px';
-    empty.innerHTML = '<p style="font-size:14px;color:var(--text-mid)">All suggestions logged — great work!</p>';
+    const empty = el('div','card'); empty.style.padding = '28px 18px; text-align:center';
+    empty.innerHTML = '<p style="font-size:1rem;color:var(--text-mid);text-align:center">All suggestions logged — great work!</p>';
     root.appendChild(empty);
   } else {
     const container = el('div','card-light suggestion-container');
+    container.style.marginBottom = '32px';
     rec.forEach((food, idx) => {
       const isPrimary = idx === 0;
       const done = todayIds.includes(food.id);
       const row = el('div', `suggestion-row${done?' done':''}`);
+      row.style.padding = isPrimary ? '20px 18px' : '16px 18px';
 
       const inner = el('div','suggestion-row-inner');
       const left  = el('div');
       const nameRow = el('div','suggestion-name-row');
-      const nameEl = el('span', `suggestion-name${done?' done':''}`); nameEl.textContent = food.name;
+      const nameEl = el('span', `suggestion-name${done?' done':''}`);
+      nameEl.textContent = food.name;
+      nameEl.style.fontSize = isPrimary ? '1.06rem' : '0.94rem';
       nameRow.appendChild(nameEl);
       tagPills(food.tags, nameRow);
       if (!isPrimary) { const at = el('span','also-today'); at.textContent = 'Also today'; nameRow.appendChild(at); }
       left.appendChild(nameRow);
       const reason = el('div', `suggestion-reason${done?' done':''}`);
+      reason.style.marginTop = '4px';
       reason.textContent = food.reason + (!done && food.portion && isPrimary ? ` · ${food.portion}` : '');
       left.appendChild(reason);
       inner.appendChild(left);
-
       if (done) {
         const check = el('div','check-circle');
         check.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><polyline points="2,6.5 5,9.5 10,3" stroke="var(--sage)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -386,43 +403,27 @@ function renderHome(root) {
       }
       row.appendChild(inner);
       if (!done) {
-        row.addEventListener('click', () => {
-          logFood(food.id, null);
-          showToast(`${food.name} logged`);
-          navigate('home');
-        });
+        row.addEventListener('click', () => { logFood(food.id, null); showToast(`${food.name} logged`); navigate('home'); });
       }
       container.appendChild(row);
     });
     root.appendChild(container);
   }
 
-  // ── THIRD 3: Progress + stage (equal visual weight to top) ──
-  // Each card has same padding/shadow as suggestion container.
-  // 28px gap between each third.
-
-  // Progress pills moved here — part of the middle/lower weight
-  const pillsWrap = el('div',''); pillsWrap.style.marginTop = '28px';
-  const pills = el('div','progress-pills');
-  if (aw >= 26) {
-    const ip = el('div', `progress-pill ${todayHasIron?'pill-iron-yes':'pill-iron-no'}`);
-    ip.innerHTML = `<span class="dot" style="background:${todayHasIron?'var(--peach)':'#C5B9A8'}"></span>Iron today: ${todayHasIron?'Yes':'Not yet'}`;
-    pills.appendChild(ip);
-  }
-  if (cat === 'ready') {
-    const ap = el('div','progress-pill pill-allergen');
-    ap.innerHTML = `<span class="dot" style="background:var(--sky)"></span>Allergens this week: ${weekAllergenDays} day${weekAllergenDays!==1?'s':''}`;
-    pills.appendChild(ap);
-  }
-  if (pills.children.length) { pillsWrap.appendChild(pills); root.appendChild(pillsWrap); }
+  // ═══════════════════════════════════════════════════════
+  // THIRD 3 — Tracking cards (~33% of viewport)
+  // Two cards stacked: allergen progress + stage info.
+  // Each card has generous padding so this third has mass.
+  // ═══════════════════════════════════════════════════════
 
   // Allergen progress card
   if (cat === 'ready') {
-    const alabel = el('p','section-label'); alabel.style.marginTop = '6px'; alabel.textContent = 'Allergen progress';
+    const alabel = el('p','section-label'); alabel.style.marginBottom = '10px'; alabel.textContent = 'Allergen progress';
     root.appendChild(alabel);
-    const ac = el('div','card'); ac.style.padding = '20px 18px';
-    const arow = el('div'); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:4px';
-    const acount = el('span'); acount.style.cssText = 'font-size:0.94rem;font-weight:600;color:var(--text)';
+    const ac = el('div','card'); ac.style.padding = '22px 18px; margin-bottom:16px';
+    // count + dots row
+    const arow = el('div'); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:14px';
+    const acount = el('span'); acount.style.cssText = 'font-size:1rem;font-weight:600;color:var(--text)';
     acount.textContent = `${introduced} of ${KEY_ALLERGENS.length} introduced`;
     const dots = el('div','allergen-dots');
     KEY_ALLERGENS.forEach(id => {
@@ -432,8 +433,19 @@ function renderHome(root) {
       dots.appendChild(d);
     });
     arow.appendChild(acount); arow.appendChild(dots); ac.appendChild(arow);
+    // Progress pill row
+    const pills = el('div','progress-pills'); pills.style.marginBottom = '0';
+    if (aw >= 26) {
+      const ip = el('div', `progress-pill ${todayHasIron?'pill-iron-yes':'pill-iron-no'}`);
+      ip.innerHTML = `<span class="dot" style="background:${todayHasIron?'var(--peach)':'#C5B9A8'}"></span>Iron today: ${todayHasIron?'Yes':'Not yet'}`;
+      pills.appendChild(ip);
+    }
+    const ap = el('div','progress-pill pill-allergen');
+    ap.innerHTML = `<span class="dot" style="background:var(--sky)"></span>This week: ${weekAllergenDays} day${weekAllergenDays!==1?'s':''}`;
+    pills.appendChild(ap);
+    ac.appendChild(pills);
     if (nextAFood) {
-      const next = el('div','allergen-next'); next.style.marginTop = '12px';
+      const next = el('div','allergen-next'); next.style.marginTop = '14px';
       next.innerHTML = `Next up: <strong style="color:var(--text)">${esc(nextAFood.name)}</strong>`;
       ac.appendChild(next);
     }
@@ -441,20 +453,20 @@ function renderHome(root) {
   }
 
   // About this stage card
-  const slabel2 = el('p','section-label'); slabel2.style.marginTop = '6px'; slabel2.textContent = 'About this stage';
+  const slabel2 = el('p','section-label'); slabel2.style.marginBottom = '10px'; slabel2.textContent = 'About this stage';
   root.appendChild(slabel2);
-  const stageCard = el('div','card'); stageCard.style.padding = '20px 18px';
-  const stageRow = el('div','stage-row'); stageRow.style.marginBottom = '16px';
+  const stageCard = el('div','card'); stageCard.style.padding = '22px 18px';
+  const stageRow = el('div','stage-row'); stageRow.style.marginBottom = '18px';
   const s1 = el('div','stage-item');
-  s1.innerHTML = `<div class="stage-label">Age</div><div class="stage-value" style="font-size:1.1rem">${ageMonths} months</div>`;
+  s1.innerHTML = `<div class="stage-label">Age</div><div class="stage-value" style="font-size:1.12rem;margin-top:4px">${ageMonths} months</div>`;
   const sdiv = el('div','stage-divider');
   const s2 = el('div','stage-item');
-  s2.innerHTML = `<div class="stage-label">Texture</div><div class="stage-value" style="font-size:1.1rem">${texture}</div>`;
+  s2.innerHTML = `<div class="stage-label">Texture</div><div class="stage-value" style="font-size:1.12rem;margin-top:4px">${texture}</div>`;
   stageRow.appendChild(s1); stageRow.appendChild(sdiv); stageRow.appendChild(s2);
   stageCard.appendChild(stageRow);
-  const divider = el('div','divider'); stageCard.appendChild(divider);
+  const hr = el('div','divider'); stageCard.appendChild(hr);
   const note = el('p','');
-  note.style.cssText = 'font-size:0.82rem;color:var(--text-sub);line-height:1.65;margin-top:12px';
+  note.style.cssText = 'font-size:0.84rem;color:var(--text-sub);line-height:1.7;margin-top:14px';
   note.innerHTML = `Exposure matters more than quantity — it's okay if ${esc(p.name)} eats very little. <em>Raising Children Network</em>`;
   stageCard.appendChild(note);
   root.appendChild(stageCard);
