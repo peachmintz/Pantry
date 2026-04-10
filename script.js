@@ -300,19 +300,15 @@ function showOnboarding() {
 /* ── Navigation ─────────────────────────────────────────────── */
 function navigate(tab) {
   state.currentTab = tab;
-  // Scroll FIRST before any DOM changes — this is the only reliable approach
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   const main = document.getElementById('appMain');
+  main.scrollTop = 0;  // app-main is the scroll container — this always works
   main.innerHTML = '';
   const screen = el('div', 'screen');
   const renderers = { home: renderHome, log: renderLog, meals: renderMeals, calendar: renderCalendar, profile: renderProfile };
   (renderers[tab] || renderHome)(screen);
   main.appendChild(screen);
-  // Belt and braces: also scroll after render in case browser restored position
-  document.documentElement.scrollTop = 0;
-  document.body.scrollTop = 0;
+  main.scrollTop = 0;
 }
 
 document.getElementById('bottomNav').addEventListener('click', e => {
@@ -349,50 +345,50 @@ function renderHome(root) {
   const nextAId = KEY_ALLERGENS.find(id => allergenStatus(id) === 'not_introduced');
   const nextAFood = nextAId ? foodById(nextAId) : null;
 
-  // ═══════════════════════════════════════════════════════
-  // THIRD 1 — Focus banner (~33% of viewport)
-  // Large, full-width coloured card. Padding increased so it
-  // takes up real vertical space, not just a caption bar.
-  // ═══════════════════════════════════════════════════════
-  const banner = el('div','focus-banner');
-  banner.style.cssText = 'margin-bottom:32px;padding:28px 22px;';
-  banner.innerHTML = `<p class="focus-label">Today's focus</p>
-    <p class="focus-headline" style="font-size:1.3rem;margin-bottom:10px">${esc(focus)}</p>
-    <p class="focus-support" style="font-size:0.88rem">${esc(focusSupport)}</p>`;
-  root.appendChild(banner);
+  // Use a flex column that fills the scroll container height
+  // Each third is a flex child with flex:1 so they truly share space equally
+  root.style.cssText = 'display:flex;flex-direction:column;min-height:100%;gap:0;';
 
-  // ═══════════════════════════════════════════════════════
-  // THIRD 2 — Suggestions (~33% of viewport)
-  // Suggestion rows with generous padding per row.
-  // ═══════════════════════════════════════════════════════
+  // ── THIRD 1: Focus banner ──────────────────────────────────
+  const t1 = el('div','');
+  t1.style.cssText = 'flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:8px;';
+
+  const banner = el('div','focus-banner');
+  banner.style.cssText = 'margin-bottom:0;';
+  banner.innerHTML = `<p class="focus-label">Today's focus</p>
+    <p class="focus-headline">${esc(focus)}</p>
+    <p class="focus-support">${esc(focusSupport)}</p>`;
+  t1.appendChild(banner);
+  root.appendChild(t1);
+
+  // ── THIRD 2: Suggestions ──────────────────────────────────
+  const t2 = el('div','');
+  t2.style.cssText = 'flex:1;display:flex;flex-direction:column;justify-content:center;padding:8px 0;';
+
   const slabel = el('p','section-label'); slabel.style.marginBottom = '10px'; slabel.textContent = 'Suggested today';
-  root.appendChild(slabel);
+  t2.appendChild(slabel);
 
   if (rec.length === 0) {
-    const empty = el('div','card'); empty.style.padding = '28px 18px; text-align:center';
-    empty.innerHTML = '<p style="font-size:1rem;color:var(--text-mid);text-align:center">All suggestions logged — great work!</p>';
-    root.appendChild(empty);
+    const empty = el('div','card');
+    empty.innerHTML = '<p style="font-size:1rem;color:var(--text-mid);text-align:center">All done for today!</p>';
+    t2.appendChild(empty);
   } else {
     const container = el('div','card-light suggestion-container');
-    container.style.marginBottom = '32px';
+    container.style.marginBottom = '0';
     rec.forEach((food, idx) => {
       const isPrimary = idx === 0;
       const done = todayIds.includes(food.id);
       const row = el('div', `suggestion-row${done?' done':''}`);
-      row.style.padding = isPrimary ? '20px 18px' : '16px 18px';
-
       const inner = el('div','suggestion-row-inner');
-      const left  = el('div');
+      const left = el('div');
       const nameRow = el('div','suggestion-name-row');
       const nameEl = el('span', `suggestion-name${done?' done':''}`);
       nameEl.textContent = food.name;
-      nameEl.style.fontSize = isPrimary ? '1.06rem' : '0.94rem';
       nameRow.appendChild(nameEl);
       tagPills(food.tags, nameRow);
       if (!isPrimary) { const at = el('span','also-today'); at.textContent = 'Also today'; nameRow.appendChild(at); }
       left.appendChild(nameRow);
       const reason = el('div', `suggestion-reason${done?' done':''}`);
-      reason.style.marginTop = '4px';
       reason.textContent = food.reason + (!done && food.portion && isPrimary ? ` · ${food.portion}` : '');
       left.appendChild(reason);
       inner.appendChild(left);
@@ -407,23 +403,22 @@ function renderHome(root) {
       }
       container.appendChild(row);
     });
-    root.appendChild(container);
+    t2.appendChild(container);
   }
+  root.appendChild(t2);
 
-  // ═══════════════════════════════════════════════════════
-  // THIRD 3 — Tracking cards (~33% of viewport)
-  // Two cards stacked: allergen progress + stage info.
-  // Each card has generous padding so this third has mass.
-  // ═══════════════════════════════════════════════════════
+  // ── THIRD 3: Tracking info ────────────────────────────────
+  // Always rendered regardless of cat — guaranteed bottom third
+  const t3 = el('div','');
+  t3.style.cssText = 'flex:1;display:flex;flex-direction:column;justify-content:center;padding:8px 0 16px;';
 
-  // Allergen progress card
+  // Allergen progress (6+ months) OR iron/stage summary for younger babies
   if (cat === 'ready') {
     const alabel = el('p','section-label'); alabel.style.marginBottom = '10px'; alabel.textContent = 'Allergen progress';
-    root.appendChild(alabel);
-    const ac = el('div','card'); ac.style.padding = '22px 18px; margin-bottom:16px';
-    // count + dots row
-    const arow = el('div'); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:14px';
-    const acount = el('span'); acount.style.cssText = 'font-size:1rem;font-weight:600;color:var(--text)';
+    t3.appendChild(alabel);
+    const ac = el('div','card'); ac.style.marginBottom = '14px';
+    const arow = el('div'); arow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px';
+    const acount = el('span'); acount.style.cssText = 'font-size:0.94rem;font-weight:600;color:var(--text)';
     acount.textContent = `${introduced} of ${KEY_ALLERGENS.length} introduced`;
     const dots = el('div','allergen-dots');
     KEY_ALLERGENS.forEach(id => {
@@ -433,44 +428,44 @@ function renderHome(root) {
       dots.appendChild(d);
     });
     arow.appendChild(acount); arow.appendChild(dots); ac.appendChild(arow);
-    // Progress pill row
-    const pills = el('div','progress-pills'); pills.style.marginBottom = '0';
+    const pills = el('div','progress-pills'); pills.style.margin = '0';
     if (aw >= 26) {
       const ip = el('div', `progress-pill ${todayHasIron?'pill-iron-yes':'pill-iron-no'}`);
       ip.innerHTML = `<span class="dot" style="background:${todayHasIron?'var(--peach)':'#C5B9A8'}"></span>Iron today: ${todayHasIron?'Yes':'Not yet'}`;
       pills.appendChild(ip);
     }
     const ap = el('div','progress-pill pill-allergen');
-    ap.innerHTML = `<span class="dot" style="background:var(--sky)"></span>This week: ${weekAllergenDays} day${weekAllergenDays!==1?'s':''}`;
+    ap.innerHTML = `<span class="dot" style="background:var(--sky)"></span>Allergens this week: ${weekAllergenDays} day${weekAllergenDays!==1?'s':''}`;
     pills.appendChild(ap);
     ac.appendChild(pills);
     if (nextAFood) {
-      const next = el('div','allergen-next'); next.style.marginTop = '14px';
+      const next = el('div','allergen-next'); next.style.marginTop = '12px';
       next.innerHTML = `Next up: <strong style="color:var(--text)">${esc(nextAFood.name)}</strong>`;
       ac.appendChild(next);
     }
-    root.appendChild(ac);
+    t3.appendChild(ac);
   }
 
-  // About this stage card
+  // Stage card — always shown
   const slabel2 = el('p','section-label'); slabel2.style.marginBottom = '10px'; slabel2.textContent = 'About this stage';
-  root.appendChild(slabel2);
-  const stageCard = el('div','card'); stageCard.style.padding = '22px 18px';
-  const stageRow = el('div','stage-row'); stageRow.style.marginBottom = '18px';
+  t3.appendChild(slabel2);
+  const sc = el('div','card');
+  const sr = el('div','stage-row'); sr.style.marginBottom = '14px';
   const s1 = el('div','stage-item');
-  s1.innerHTML = `<div class="stage-label">Age</div><div class="stage-value" style="font-size:1.12rem;margin-top:4px">${ageMonths} months</div>`;
+  s1.innerHTML = `<div class="stage-label">Age</div><div class="stage-value">${ageMonths} months</div>`;
   const sdiv = el('div','stage-divider');
   const s2 = el('div','stage-item');
-  s2.innerHTML = `<div class="stage-label">Texture</div><div class="stage-value" style="font-size:1.12rem;margin-top:4px">${texture}</div>`;
-  stageRow.appendChild(s1); stageRow.appendChild(sdiv); stageRow.appendChild(s2);
-  stageCard.appendChild(stageRow);
-  const hr = el('div','divider'); stageCard.appendChild(hr);
+  s2.innerHTML = `<div class="stage-label">Texture</div><div class="stage-value">${texture}</div>`;
+  sr.appendChild(s1); sr.appendChild(sdiv); sr.appendChild(s2); sc.appendChild(sr);
+  const divEl = el('div','divider'); sc.appendChild(divEl);
   const note = el('p','');
-  note.style.cssText = 'font-size:0.84rem;color:var(--text-sub);line-height:1.7;margin-top:14px';
+  note.style.cssText = 'font-size:0.82rem;color:var(--text-sub);line-height:1.65;margin-top:12px';
   note.innerHTML = `Exposure matters more than quantity — it's okay if ${esc(p.name)} eats very little. <em>Raising Children Network</em>`;
-  stageCard.appendChild(note);
-  root.appendChild(stageCard);
+  sc.appendChild(note);
+  t3.appendChild(sc);
+  root.appendChild(t3);
 }
+
 
 /* ── LOG ────────────────────────────────────────────────────── */
 function renderLog(root) {
@@ -990,6 +985,4 @@ if (!state.profile) {
   showOnboarding();
 } else {
   navigate('home');
-  // Ensure page starts at top on initial load
-  setTimeout(() => { window.scrollTo(0, 0); }, 0);
 }
